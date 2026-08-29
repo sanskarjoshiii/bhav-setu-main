@@ -15,7 +15,11 @@ import {
 import PageHeader from "@/components/PageHeader";
 import Section from "@/components/Section";
 import StatCard from "@/components/StatCard";
-import { COMMUNITY_TOTALS, POOLS, poolEconomics, type TransportPool } from "@/lib/mock/community";
+import { getPools, joinPool, createPool, type ApiPool } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { useApi } from "@/lib/useApi";
+import { ErrorState, LoadingState } from "@/components/AsyncBoundary";
+import { adaptPool, poolEconomicsOf, type AdaptedPool } from "@/lib/poolAdapter";
 import { cx, qtl, rupees } from "@/lib/format";
 
 const STATUS = {
@@ -25,7 +29,53 @@ const STATUS = {
 } as const;
 
 export default function CommunityPage() {
-  const [joined, setJoined] = useState<string[]>(["POOL-2026-018"]);
+  const { user } = useAuth();
+  // A signed-in farmer sees trucks leaving from HIS district. Showing him a
+  // pool 200 km away is noise — the whole point is neighbours going the same
+  // morning. Signed out, he sees everything.
+  const [showAll, setShowAll] = useState(false);
+  const district = showAll ? undefined : user?.district || undefined;
+
+  const [joined, setJoined] = useState<string[]>([]);
+  const state = useApi(() => getPools(undefined, district), [district]);
+
+  const apiPools = state.data ?? [];
+  const pools = apiPools.map(adaptPool);
+
+  const COMMUNITY_TOTALS = {
+    activePools: apiPools.length,
+    farmers: new Set(apiPools.flatMap((p) => p.members.map((m) => m.farmer))).size,
+    villages: new Set(
+      apiPools.flatMap((p) => p.members.map((m) => m.village).filter(Boolean)),
+    ).size,
+    // Rupees actually saved: each pool's per-quintal saving times the quintals
+    // riding on it. Not a headline number invented for the page.
+    savedThisMonth: apiPools.reduce(
+      (sum, p) => sum + p.savingPerQtl * p.bookedQtl,
+      0,
+    ),
+  };
+
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  async function handleJoin(pool: AdaptedPool) {
+    setJoinError(null);
+    try {
+      await joinPool(pool.apiId, {
+        farmer: user?.name || "You",
+        village: user?.village || "",
+        qtyQtl: 12,
+      });
+      setJoined((prev) => [...prev, pool.id]);
+      state.reload();
+    } catch (err) {
+      // Usually "only N qtl of space left". Say which pool, so the message is
+      // attached to the card the farmer just tapped.
+      setJoinError(
+        `${pool.mandi}: ${err instanceof Error ? err.message : "could not join"}`,
+      );
+    }
+  }
 
   return (
     <>
@@ -42,8 +92,8 @@ export default function CommunityPage() {
 
       <Section>
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Active pools" value={String(COMMUNITY_TOTALS.activePools)} hint="Near Vinchur" />
-          <StatCard label="Farmers taking part" value={String(COMMUNITY_TOTALS.farmers)} hint="Across 7 villages" />
+          <StatCard label="Active pools" value={String(COMMUNITY_TOTALS.activePools)} hint="Open for joining" />
+          <StatCard label="Farmers taking part" value={String(COMMUNITY_TOTALS.farmers)} hint={`Across ${COMMUNITY_TOTALS.villages} villages`} />
           <StatCard
             label="Saved this month"
             value={rupees(COMMUNITY_TOTALS.savedThisMonth)}
@@ -53,18 +103,54 @@ export default function CommunityPage() {
           <StatCard label="Typical saving" value="50–75%" hint="Depends on how many join" tone="up" />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          {POOLS.map((pool) => (
-            <PoolCard
-              key={pool.id}
-              pool={pool}
-              joined={joined.includes(pool.id)}
-              onJoin={() =>
-                setJoined((j) => (j.includes(pool.id) ? j.filter((x) => x !== pool.id) : [...j, pool.id]))
-              }
-            />
-          ))}
-        </div>
+        {user?.district && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-[0.82rem] text-muted">Showing trucks from</span>
+            <button
+              onClick={() => setShowAll(false)}
+              className={cx("chip", !showAll && "chip-active")}
+            >
+              <MapPin size={12} />
+              {user.district}
+            </button>
+            <button
+              onClick={() => setShowAll(true)}
+              className={cx("chip", showAll && "chip-active")}
+            >
+              All districts
+            </button>
+          </div>
+        )}
+
+        {joinError && (
+          <p role="alert" className="mb-4 rounded-lg bg-down/10 px-3 py-2 text-[0.84rem] text-down">
+            {joinError}
+          </p>
+        )}
+
+        {state.loading ? (
+          <LoadingState label="Finding trucks going your way…" rows={4} />
+        ) : state.error ? (
+          <ErrorState error={state.error} onRetry={state.reload} />
+        ) : pools.length === 0 ? (
+          <div className="card p-8 text-center text-muted">
+            {user?.district && !showAll
+              ? `No trucks are forming in ${user.district} right now. Start one and neighbours can join.`
+              : "No pools are forming right now. Start one and neighbours can join."}
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {pools.map((pool, i) => (
+              <PoolCard
+                key={pool.id}
+                pool={pool}
+                api={apiPools[i]}
+                joined={joined.includes(pool.id)}
+                onJoin={() => void handleJoin(pool)}
+              />
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section>
@@ -89,14 +175,16 @@ export default function CommunityPage() {
 
 function PoolCard({
   pool,
+  api,
   joined,
   onJoin,
 }: {
-  pool: TransportPool;
+  pool: AdaptedPool;
+  api: ApiPool;
   joined: boolean;
   onJoin: () => void;
 }) {
-  const econ = poolEconomics(pool);
+  const econ = poolEconomicsOf(api);
   const status = STATUS[pool.status];
 
   return (
