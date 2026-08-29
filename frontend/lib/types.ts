@@ -81,9 +81,26 @@ export interface HorizonMetric {
   model: number;
 }
 
+export interface CropUplift {
+  crop: string;
+  scenarios: number;
+  upliftPct: number;
+  winRate: number;
+}
+
+export interface HorizonCoverage {
+  horizon: number;
+  picp: number;
+}
+
 export interface AccuracySummary {
   mape: HorizonMetric[];
   pinball: HorizonMetric[];
+  /** Real band coverage per horizon — the honesty curve. */
+  coverage: HorizonCoverage[];
+  /** Real backtest, per crop. Empty until scripts/backtest.py --record has run. */
+  backtestPerCrop: CropUplift[];
+  backtestScenarios: number;
   picp: number;
   directionalAccuracy: number;
   modelVersion: string;
