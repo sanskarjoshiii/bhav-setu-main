@@ -51,6 +51,7 @@ class WeatherResult:
     mandis: int = 0
     historical_rows: int = 0
     forecast_rows: int = 0
+    stale_forecasts_removed: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -58,6 +59,7 @@ class WeatherResult:
             "mandis": self.mandis,
             "historical_rows": self.historical_rows,
             "forecast_rows": self.forecast_rows,
+            "stale_forecasts_removed": self.stale_forecasts_removed,
         }
 
 
@@ -200,6 +202,17 @@ def run(start: date | None = None, end: date | None = None,
             log.info("weather_mandi_done", mandi=mandi["name"],
                      historical=len(rows), forecast=len(frows))
             time.sleep(PAUSE_BETWEEN_MANDIS)
+
+        # A forecast for a day that has already passed is worthless, and worse,
+        # it sits in the table looking like an observation. The archive endpoint
+        # lags real time by ARCHIVE_LAG_DAYS, so those rows cannot simply be
+        # overwritten by a re-fetch — they have to be dropped.
+        result.stale_forecasts_removed = int(conn.execute(text(
+            "DELETE FROM weather_daily WHERE is_forecast AND obs_date < CURRENT_DATE"
+        )).rowcount or 0)
+        if result.stale_forecasts_removed:
+            log.info("weather_stale_forecasts_removed",
+                     rows=result.stale_forecasts_removed)
 
     if counters is not None:
         counters.rows_in = result.historical_rows + result.forecast_rows

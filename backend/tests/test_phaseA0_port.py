@@ -408,8 +408,20 @@ CONSUMER_DIRS: tuple[str, ...] = (
     "api", "decision", "agent", "whatsapp", "community", "economics", "auth", "backtest",
 )
 
-#: the only two names a consumer may import from the model side
-ALLOWED_ML_MODULES: frozenset[str] = frozenset({"ml.port", "ml.provider"})
+#: The only names a consumer may import from the model side.
+#:
+#: `ml.registry` was added in Phase 8 for `routers/accuracy.py`, and the addition
+#: is deliberate rather than a convenience. What the guard exists to prevent is a
+#: consumer that must be EDITED when the model changes — one that opens a booster
+#: file or imports LightGBM. `ml.registry` does neither: it reads version rows and
+#: their metrics out of Postgres and handles boosters as opaque objects, so the
+#: accuracy page shows `baseline-v1` or `lgbm-v2` with the same code either way.
+#: PLAN-NOMODEL.md's Phase B4 says of that router, in as many words, "nothing to
+#: change — it already reads the active version".
+#:
+#: If a future edit makes `ml.registry` import LightGBM, `FORBIDDEN_ROOTS` still
+#: catches it, because that check runs on the module's own imports.
+ALLOWED_ML_MODULES: frozenset[str] = frozenset({"ml.port", "ml.provider", "ml.registry"})
 
 _IMPORT = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))", re.MULTILINE)
 

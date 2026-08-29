@@ -7,11 +7,12 @@ else
 endif
 
 .PHONY: up down install initdb backfill collect train train-dry evaluate-baseline backtest api web seed test \
+        check-product reset-demo check-phase10 \
         check-data check-data-csv build-dataset check-phaseB2 \
         check-phase0 check-phase1 check-phase2 check-phase3 check-phase4 \
         check-phaseA0 check-phaseA1 check-phaseA2 check-phaseA3 \
         check-phase5 check-phase6 check-phase7 check-phase8 check-phase9 \
-        check-phase10 check-phase11 check-phase12
+        check-frontend check-phase11 check-phase12
 
 # ── infrastructure ─────────────────────────────────────────────────────────
 up:
@@ -116,6 +117,18 @@ check-phase4:
 check-phase5:
 	cd backend && ../$(BIN)/python -m pytest tests/test_phase5_economics.py -v
 
+# The whole product track in one go: economics, decision, API.
+check-product:
+	cd backend && ../$(BIN)/python -m pytest tests/test_phase5_economics.py tests/test_phase6_decision.py tests/test_phase8_api.py -v
+
+# Reset the demo to its starting state. Real prices are never touched.
+reset-demo:
+	$(BIN)/python scripts/seed_demo_data.py --reset
+
+# Phase 10 — OTP, sessions, locations, pooling by district.
+check-phase10:
+	cd backend && ../$(BIN)/python -m pytest tests/test_phase10_auth.py -v
+
 check-phase6:
 	cd backend && ../$(BIN)/python -m pytest tests/test_phase6_decision.py -v
 
@@ -128,7 +141,10 @@ check-phase8:
 check-phase9:
 	cd backend && ../$(BIN)/python -m pytest tests/test_phase9_bot.py -v
 
-check-phase10:
+# Phase 9 in PLAN-FINAL is the frontend wiring, and a clean production build is
+# its real gate. This was labelled check-phase10, which collided with the OTP
+# target above and had nothing to do with auth.
+check-frontend:
 	cd frontend && npm run build
 
 check-phase11:
