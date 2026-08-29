@@ -23,6 +23,7 @@ import type {
   PricePoint,
   Recommendation,
   RiskProfile,
+  IrrigationAdvisory,
   SaleReport,
   Storage,
   TransparencyScore,
@@ -359,6 +360,25 @@ export function joinPool(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+// ── soil & groundwater ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/irrigation — irrigate or wait, for one crop at one place.
+ *
+ * The second decision the product makes. Same seam as everything else: the
+ * water balance is the backend's, and this returns the sentence it produced
+ * along with the numbers behind it.
+ */
+export function getIrrigation(
+  cropId = "onion",
+  mandiName?: string,
+  days = 30,
+): Promise<IrrigationAdvisory> {
+  return request<IrrigationAdvisory>(
+    `/irrigation${qs({ crop: cropId, mandi: mandiName, days })}`,
+  );
 }
 
 // ── health ─────────────────────────────────────────────────────────────────

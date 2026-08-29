@@ -6,6 +6,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Query
 
+import history
 from api import deps
 from api.schemas import PoolCreateRequest, PoolJoinRequest, TransportPool
 from community import pools as community
@@ -41,7 +42,7 @@ def list_pools(
 def create_pool(request: PoolCreateRequest) -> TransportPool:
     mandi_id, mandi_name, _ = deps.resolve_mandi(request.mandi)
     distance = _distance_to(mandi_id)
-    return _wire(community.create_pool(
+    pool = community.create_pool(
         mandi_id=mandi_id,
         travel_date=_parse_date(request.travel_date),
         farmer=request.farmer,
@@ -49,13 +50,44 @@ def create_pool(request: PoolCreateRequest) -> TransportPool:
         qty_qtl=request.qty_qtl,
         distance_km=distance,
         capacity_qtl=request.capacity_qtl,
-    ))
+    )
+    _record_pool(pool, request.farmer, request.village, request.qty_qtl,
+                 mandi_name, joined=False)
+    return _wire(pool)
 
 
 @router.post("/{pool_id}/join", response_model=TransportPool)
 def join_pool(pool_id: int, request: PoolJoinRequest) -> TransportPool:
-    return _wire(community.join_pool(
-        pool_id, request.farmer, request.village, request.qty_qtl))
+    pool = community.join_pool(
+        pool_id, request.farmer, request.village, request.qty_qtl)
+    _record_pool(pool, request.farmer, request.village, request.qty_qtl,
+                 pool.mandi, joined=True)
+    return _wire(pool)
+
+
+def _record_pool(pool, farmer_name: str, village: str, qty_qtl: float,
+                 mandi: str, *, joined: bool) -> None:
+    """Mirror a pool action into the farmer's history, if we can name him."""
+    from sqlalchemy import text
+
+    from core.db import get_conn
+
+    handle = f"web:{farmer_name.strip().lower()}|{village.strip().lower()}"
+    with get_conn() as conn:
+        farmer_id = conn.execute(
+            text("SELECT id FROM farmers WHERE phone_e164 = :h OR lower(name) = :n"),
+            {"h": handle, "n": farmer_name.strip().lower()},
+        ).scalar()
+    if farmer_id is None:
+        return
+    snapshot = history.snapshot_from_db(int(farmer_id))
+    if snapshot:
+        history.record_pool(
+            snapshot, joined=joined, mandi=mandi,
+            travel_date=str(getattr(pool, "travel_date", "")),
+            qty_qtl=qty_qtl,
+            saving_per_qtl=float(getattr(pool, "saving_per_qtl", 0.0) or 0.0),
+            pool_id=int(getattr(pool, "id", 0) or 0))
 
 
 @router.delete("/{pool_id}/members/{member_id}", response_model=TransportPool)

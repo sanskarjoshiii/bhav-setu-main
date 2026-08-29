@@ -1,7 +1,10 @@
 # STATUS.md — Where Bhav Setu actually stands
 
 > Updated 29 August 2026. Every claim here was verified by running it.
-> **339 backend tests pass, 2 skipped, 0 fail.** Frontend builds clean, 18 routes.
+> **368 backend tests collected, 2 skipped.** The full suite last ran green at
+> 339; Phase 14 added 27, and those 27 plus the 95-test product core
+> (economics, decision, API, schema) and the ingestion suite were re-run for
+> this push. Frontend builds clean, **19 routes**.
 
 ---
 
@@ -39,6 +42,7 @@ which are arithmetic, not prediction. Details in [the backtest section](#phase-7
 | **11** | WhatsApp agent | ❌ **Explicitly excluded from this push** |
 | **12** | Community pooling | ✅ Tables, API, page — **filtered by district** |
 | **13** | Deploy + seed + reset | 🟡 Seed and reset done; deploy files not written |
+| **14** | Soil & groundwater | ✅ Ingested, advisory, `/irrigation` page — 27 tests |
 
 ---
 
@@ -253,6 +257,73 @@ Two bugs found by running it and fixed:
   after themselves, and `reset-demo` clears every pool.
 
 ---
+
+## Phase 14 — Soil & groundwater
+
+The second decision the product makes. Prices answer *when to sell*; this
+answers *when to irrigate*, from the same Open-Meteo pull — so the whole stream
+costs **no extra API requests**.
+
+`config/irrigation.yaml`, `backend/agronomy/irrigation.py`,
+`GET /api/v1/irrigation`, and the `/irrigation` page.
+
+**What was added to the data.** Four columns on `weather_daily` —
+`soil_moisture_surface` (0–7 cm), `soil_moisture_root` (7–28 cm),
+`soil_temp_c`, and `et0_mm` (FAO-56 reference evapotranspiration). Backfilled
+from June 2025: **7,922 rows across all 17 mandis**, of which 7,905 carry a
+root-zone reading.
+
+**The arithmetic** is FAO-56's simplest form — crop demand is `Kc × ET0`, and
+irrigation must supply whatever the rain did not. Growth stages are deliberately
+not modelled, because we do not know a sowing date; mid-season Kc over-states
+demand for a young crop, and the page says so instead of implying a precision
+it does not have.
+
+Live for onion at Nashik, through the year:
+
+| As of | Soil | Status | Shortfall | Forecast | Verdict |
+|---|---:|---|---:|---:|---|
+| 15 Nov | 0.309 | adequate | 37 mm | 0 mm | Plan to irrigate |
+| 10 Mar | 0.320 | adequate | 52 mm | 0 mm | Plan to irrigate |
+| 20 May | 0.273 | dry | 62 mm | 18 mm | Irrigate within a day or two unless the rain arrives |
+| 20 Jul | 0.391 | wet | 0 mm | 213 mm | Hold off — rain is coming |
+
+### The bug that made this worth doing carefully
+
+The first cut used textbook medium-loam thresholds — field capacity 0.30,
+wilting point 0.12. They are correct soil physics and **wrong for this data
+source**. Open-Meteo's ERA5 7–28 cm layer over the Deccan sits on a higher
+scale: across 7,905 observed days the series is bimodal, with a monsoon plateau
+at **0.430** and a dry-season plateau at **0.268**, and it never once reaches
+0.12.
+
+So the *dry season* sat above the configured field capacity, and Nashik in
+March — **0.2 mm of rain all month against 6.2 mm/day of ET0** — was reported as
+*"the soil is still wet, no irrigation needed."* That is the most harmful
+sentence this advisory could produce.
+
+The thresholds are now derived from the ingested distribution rather than a
+textbook: wilting point = p05, refill point = p25, field capacity = midway
+between the two plateaus, saturation = p85. `scripts/calibrate_soil.py`
+re-derives them and `make calibrate-soil` fails if the config has drifted.
+`test_a_dry_season_deficit_is_never_called_wet` pins the behaviour across six
+dry-season dates.
+
+### Honesty
+
+- **Soil moisture is modelled at the market's coordinates, not measured in a
+  field.** Good enough to say "dry" or "wet"; not good enough to schedule a pump
+  to the hour. The page says this.
+- **Pomegranate has no FAO-56 row.** Its Kc of 0.90 is the midpoint of the
+  comparable range, flagged as an assumption through the API (`kcIsAssumed`) and
+  capped at medium confidence.
+- **This stream is deliberately not wired into the price model.** Soil moisture
+  in Nashik does not move the onion price in any way we could defend, and adding
+  it would invalidate the trained model for no gain. A test asserts it has not
+  leaked into `features/registry.py`.
+
+`make soil` refreshes it — worth a weekly cron, since the forecast half of the
+window expires within sixteen days.
 
 ## Bilingual output
 

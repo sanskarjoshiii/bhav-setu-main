@@ -11,6 +11,7 @@ const DICT = {
   nav_history: { en: "History", mr: "इतिहास" },
   nav_advisor: { en: "Advisor", mr: "सल्लागार" },
   nav_compare: { en: "Compare", mr: "तुलना" },
+  nav_irrigation: { en: "Irrigation", mr: "पाणी" },
   nav_accuracy: { en: "Accuracy", mr: "अचूकता" },
   nav_transparency: { en: "Transparency", mr: "पारदर्शकता" },
   nav_chat: { en: "Chat", mr: "संवाद" },

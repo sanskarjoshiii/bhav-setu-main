@@ -32,6 +32,7 @@ REQUIRED_ENV: tuple[str, ...] = ("DATABASE_URL",)
 
 CONFIG_FILES: tuple[str, ...] = (
     "app",
+    "irrigation",
     "locations",
     "mandis",
     "crops",
@@ -113,6 +114,14 @@ class Env:
     whatsapp_access_token: str
     whatsapp_app_secret: str
     whatsapp_verify_token: str
+    mongodb_url: str
+    mongodb_db: str
+    smtp_host: str
+    smtp_port: str
+    smtp_user: str
+    smtp_password: str
+    smtp_from: str
+    app_base_url: str
 
     def require(self, field: str) -> str:
         """Return an optional env var, raising a clear error if it is still blank."""
@@ -144,6 +153,14 @@ def _load_env() -> Env:
         whatsapp_access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
         whatsapp_app_secret=os.getenv("WHATSAPP_APP_SECRET", ""),
         whatsapp_verify_token=os.getenv("WHATSAPP_VERIFY_TOKEN", ""),
+        mongodb_url=os.getenv("MONGODB_URL", "mongodb://bhav:bhav@localhost:27018/?authSource=admin"),
+        mongodb_db=os.getenv("MONGODB_DB", "bhav_history"),
+        smtp_host=os.getenv("SMTP_HOST", ""),
+        smtp_port=os.getenv("SMTP_PORT", ""),
+        smtp_user=os.getenv("SMTP_USER", ""),
+        smtp_password=os.getenv("SMTP_PASSWORD", ""),
+        smtp_from=os.getenv("SMTP_FROM", ""),
+        app_base_url=os.getenv("APP_BASE_URL", "http://localhost:3000"),
     )
 
 
@@ -152,6 +169,7 @@ class Settings:
     root: Path
     env: Env
     app: ConfigNode
+    irrigation: ConfigNode
     locations: ConfigNode
     mandis: ConfigNode
     crops: ConfigNode

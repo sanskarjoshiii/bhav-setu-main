@@ -1,0 +1,76 @@
+# Phase 14 — the soil & groundwater advisory.
+#
+# Everything here is FAO Irrigation & Drainage Paper 56 (Allen et al., 1998),
+# the standard reference for crop water requirements. Nothing is invented; where
+# a number is an assumption rather than a table value, the comment says so.
+#
+#   https://www.fao.org/4/x0490e/x0490e00.htm
+#
+# The calculation is deliberately the simple one:
+#
+#     ETc  = Kc x ET0            crop water demand, mm/day
+#     need = ETc - rainfall      what irrigation has to supply
+#
+# ET0 comes measured from Open-Meteo. Kc is a table lookup. We do NOT model
+# growth stages, because we do not know a farmer's sowing date — so we use the
+# mid-season Kc, note that this over-states demand for a young crop, and say so
+# on screen rather than hiding it.
+
+# ── crop coefficients, FAO-56 Table 12, mid-season (Kc_mid) ────────────────
+# A crop's water use as a multiple of the reference grass surface.
+crop_coefficients:
+  onion:        1.05   # dry onion
+  garlic:       1.00
+  potato:       1.15
+  tomato:       1.15
+  brinjal:      1.05
+  cauliflower:  1.05
+  cabbage:      1.05
+  green_chilli: 1.05
+  okra:         1.05
+  banana:       1.10
+  mango:        0.90
+  grapes:       0.85   # table grapes
+  orange:       0.70
+  pomegranate:  0.90   # FAO-56 gives no pomegranate row; the citrus/stone-fruit
+                       # range is 0.85-0.95 and 0.90 is the midpoint. Flagged as
+                       # an assumption wherever it is used.
+
+# ── soil water, volumetric (m3/m3) ────────────────────────────────────────
+# Open-Meteo reports volumetric water content — the fraction of soil volume
+# that is water, in the 7-28 cm layer a crop drinks from.
+#
+# These were textbook medium-loam figures (0.45/0.30/0.20/0.12) and they were
+# WRONG for this data source, in the direction that matters most. ERA5's
+# 7-28 cm layer over the Deccan sits on a higher scale than a soil-physics
+# table: across 7,900 observed days at our seventeen mandis the series is
+# clearly bimodal, with a monsoon plateau at 0.430 and a dry-season plateau at
+# 0.268 — and it essentially never reaches the textbook wilting point of 0.12.
+#
+# Under the old numbers a 0.30 field capacity put the *dry season* above it, so
+# Nashik in March — 0.2 mm of rain all month against 6.2 mm/day of ET0 — was
+# reported as "soil is still wet, no irrigation needed". That is the single
+# most harmful sentence this advisory could produce, so the thresholds are now
+# derived from the observed local distribution instead:
+#
+#   wilting_point  = 5th percentile   (0.180)  the driest days on record here
+#   refill_point   = 25th percentile  (0.279)  ~ the dry-season plateau, 0.268
+#   field_capacity   midway between the two plateaus (0.268 .. 0.430)
+#   saturation     = 85th percentile  (0.461)  the top of the monsoon plateau
+#
+# ⚠️ Still NOT measured for a specific farm. Real thresholds depend on soil
+#    texture, which varies field to field. They are good enough to say "dry" or
+#    "wet"; they are not good enough to schedule a pump to the hour. Re-derive
+#    them with scripts/calibrate_soil.py if the mandi list changes.
+soil:
+  saturation:     0.46   # water-logged; roots suffocate
+  field_capacity: 0.36   # full after drainage — the target after irrigating
+  refill_point:   0.28   # irrigate at or below this
+  wilting_point:  0.18   # below this the crop cannot extract water
+
+# ── how far ahead to look ─────────────────────────────────────────────────
+windows:
+  balance_days: 7    # how far back the water balance is summed
+  forecast_days: 7   # how far ahead rain is checked before advising a pump
+  # Rain below this in the forecast window is not worth waiting for.
+  useful_rain_mm: 10.0

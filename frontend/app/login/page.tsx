@@ -17,20 +17,23 @@ export default function LoginPage() {
   const { requestOtp, verifyOtp } = useAuth();
 
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState<"phone" | "otp">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Shown only while the backend is on `otp.channel: log` — the demo path. */
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const challenge = await requestOtp(phone);
+      const challenge = await requestOtp(phone, email || undefined);
       setDevCode(challenge.devCode ?? null);
+      setSentTo(challenge.sentTo ?? null);
       setStage("otp");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not send the code");
@@ -82,7 +85,7 @@ export default function LoginPage() {
             <div>
               <h2 className="h3">Sign in</h2>
               <p className="mt-1 text-[0.86rem] text-muted">
-                We will send a six-digit code to this number.
+                We will send you a six-digit code.
               </p>
             </div>
 
@@ -100,6 +103,28 @@ export default function LoginPage() {
               />
               <p className="mt-1.5 text-[0.75rem] text-muted">
                 10 digits, or with +91 — either is fine.
+              </p>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="email">
+                Email <span className="font-normal normal-case tracking-normal text-muted">
+                  — optional
+                </span>
+              </label>
+              <input
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@gmail.com"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                className="input"
+              />
+              <p className="mt-1.5 text-[0.75rem] text-muted">
+                Give one and the code is emailed. Otherwise it is shown on screen —
+                there is no SMS gateway yet.
               </p>
             </div>
 
@@ -125,7 +150,7 @@ export default function LoginPage() {
             <div>
               <h2 className="h3">Enter the code</h2>
               <p className="mt-1 text-[0.86rem] text-muted">
-                Sent to {phone}.{" "}
+                {sentTo ? <>Emailed to <strong>{sentTo}</strong>.</> : <>Generated for {phone}.</>}{" "}
                 <button
                   type="button"
                   onClick={() => { setStage("phone"); setOtp(""); setError(null); }}

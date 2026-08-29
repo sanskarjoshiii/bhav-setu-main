@@ -207,7 +207,17 @@ csv_backfill:
 weather:
   archive_url: https://archive-api.open-meteo.com/v1/archive
   forecast_url: https://api.open-meteo.com/v1/forecast
-  daily_vars: [precipitation_sum, temperature_2m_max, temperature_2m_min]
+  # The archive and forecast endpoints both serve these. Soil moisture and ET0
+  # come from the same call as the rain and temperature we were already asking
+  # for, so the soil stream costs no extra requests.
+  daily_vars:
+    - precipitation_sum
+    - temperature_2m_max
+    - temperature_2m_min
+    - soil_moisture_0_to_7cm_mean
+    - soil_moisture_7_to_28cm_mean
+    - soil_temperature_0_to_7cm_mean
+    - et0_fao_evapotranspiration
   forecast_days: 16
   # The archive API lags real time by a few days; anything newer than this comes
   # from the forecast endpoint instead.

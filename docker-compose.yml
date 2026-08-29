@@ -14,5 +14,21 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6380:6379"]
+  # Farmer history. Postgres stays the transactional store; this is the
+  # document view of it — one readable record per farmer, per event.
+  # 27018 to avoid clashing with a local mongod, same idea as 5433/6380.
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bhav
+      MONGO_INITDB_ROOT_PASSWORD: bhav
+      MONGO_INITDB_DATABASE: bhav_history
+    ports: ["27018:27017"]
+    volumes: ["mongodata:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      retries: 10
 volumes:
   pgdata: {}
+  mongodata: {}

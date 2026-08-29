@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/dashboard", key: "nav_dashboard" as const },
   { href: "/advisor", key: "nav_advisor" as const },
   { href: "/compare", key: "nav_compare" as const },
+  { href: "/irrigation", key: "nav_irrigation" as const },
   { href: "/community", key: "nav_community" as const },
   { href: "/history", key: "nav_history" as const },
   { href: "/chat", key: "nav_chat" as const },

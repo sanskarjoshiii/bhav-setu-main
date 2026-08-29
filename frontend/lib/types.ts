@@ -153,3 +153,54 @@ export interface SessionUser {
   language: Language;
   riskProfile: RiskProfile;
 }
+
+/** One day of the soil water record. */
+export interface SoilPoint {
+  date: string;
+  soilMoistureRoot: number | null;
+  soilMoistureSurface: number | null;
+  et0Mm: number | null;
+  rainfallMm: number | null;
+  isForecast: boolean;
+}
+
+export type SoilStatus =
+  | "saturated"
+  | "wet"
+  | "adequate"
+  | "dry"
+  | "critical"
+  | "unknown";
+
+export type IrrigationAction =
+  | "irrigate_now"
+  | "irrigate_soon"
+  | "wait"
+  | "hold_off"
+  | "waterlogged";
+
+/** The soil & groundwater advisory — mirrors `api/schemas.py`. */
+export interface IrrigationAdvisory {
+  action: IrrigationAction;
+  headline: string;
+  headlineMr: string;
+  detail: string;
+  crop: string;
+  mandi: string;
+  asOf: string;
+  soilMoisture: number | null;
+  soilStatus: SoilStatus;
+  soilTempC: number | null;
+  et07dMm: number;
+  cropDemand7dMm: number;
+  rain7dMm: number;
+  deficit7dMm: number;
+  rainForecast7dMm: number;
+  kc: number;
+  kcIsAssumed: boolean;
+  confidence: string;
+  fieldCapacity: number;
+  refillPoint: number;
+  wiltingPoint: number;
+  series: SoilPoint[];
+}

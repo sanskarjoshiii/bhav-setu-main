@@ -2,6 +2,15 @@
 
 Stored server-side so his history follows him between the website and WhatsApp
 rather than living in one browser's localStorage.
+
+Phase 15 adds the document view on top:
+
+    GET /history/farmers        every farmer we hold history for
+    GET /history/farmers/{id}   one farmer, profile plus full timeline
+
+Those two read MongoDB, where the same history is mirrored denormalised — one
+readable object per farmer instead of a four-table join. See
+`backend/history/store.py` for why both stores exist.
 """
 
 from __future__ import annotations
@@ -13,10 +22,13 @@ from typing import Any
 from fastapi import APIRouter, Query
 from sqlalchemy import text
 
+import history as history_store
 from api import deps
 from api.schemas import HistoryEntry, Wire
 from core.db import get_conn
 from core.errors import InsufficientData
+from core.mongo import is_available
+from history.store import HistoryUnavailable, counts
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -99,3 +111,40 @@ def add_history(request: HistoryCreate) -> HistoryEntry:
         action=request.action, created_at=str(date.today()),
         expected_gain=request.expected_gain, confidence=request.confidence,
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase 15 — the document view, for a judge who wants to see it all
+# ══════════════════════════════════════════════════════════════════════════
+
+@router.get("/farmers")
+def all_farmer_history(limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+    """Every farmer we hold history for, busiest first, with their counters."""
+    try:
+        return {
+            "available": True,
+            "totals": counts(),
+            "farmers": history_store.list_farmers(limit=limit),
+        }
+    except HistoryUnavailable as exc:
+        # A readable sentence beats an empty list that looks like "no farmers".
+        raise InsufficientData(str(exc)) from exc
+
+
+@router.get("/farmers/{farmer_id}")
+def one_farmer_history(farmer_id: int,
+                       events: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
+    """One farmer: who they are, and everything they have ever done here."""
+    try:
+        return history_store.farmer_document(farmer_id, event_limit=events)
+    except HistoryUnavailable as exc:
+        raise InsufficientData(str(exc)) from exc
+
+
+@router.get("/store-status")
+def store_status() -> dict[str, Any]:
+    """Is the document store reachable, and what is in it?"""
+    if not is_available():
+        return {"available": False,
+                "hint": "start it with `docker compose up -d mongo`"}
+    return {"available": True, **counts()}

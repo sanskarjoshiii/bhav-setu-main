@@ -68,12 +68,20 @@ class WeatherResult:
 _UPSERT_SQL = text(
     """
     INSERT INTO weather_daily
-        (obs_date, mandi_id, rainfall_mm, tmax_c, tmin_c, is_forecast)
-    VALUES (:obs_date, :mandi_id, :rainfall_mm, :tmax_c, :tmin_c, :is_forecast)
+        (obs_date, mandi_id, rainfall_mm, tmax_c, tmin_c,
+         soil_moisture_surface, soil_moisture_root, soil_temp_c, et0_mm,
+         is_forecast)
+    VALUES (:obs_date, :mandi_id, :rainfall_mm, :tmax_c, :tmin_c,
+            :soil_moisture_surface, :soil_moisture_root, :soil_temp_c, :et0_mm,
+            :is_forecast)
     ON CONFLICT (obs_date, mandi_id) DO UPDATE SET
         rainfall_mm = EXCLUDED.rainfall_mm,
         tmax_c      = EXCLUDED.tmax_c,
         tmin_c      = EXCLUDED.tmin_c,
+        soil_moisture_surface = EXCLUDED.soil_moisture_surface,
+        soil_moisture_root    = EXCLUDED.soil_moisture_root,
+        soil_temp_c           = EXCLUDED.soil_temp_c,
+        et0_mm                = EXCLUDED.et0_mm,
         is_forecast = EXCLUDED.is_forecast
     WHERE weather_daily.is_forecast OR NOT EXCLUDED.is_forecast
     """
@@ -117,9 +125,22 @@ def _rows_from_payload(payload: dict[str, Any], mandi_id: int,
     dates = daily.get("time") or []
     if not dates:
         raise IngestionError(f"open-meteo returned no daily block for mandi {mandi_id}")
-    rain = daily.get("precipitation_sum") or [None] * len(dates)
-    tmax = daily.get("temperature_2m_max") or [None] * len(dates)
-    tmin = daily.get("temperature_2m_min") or [None] * len(dates)
+    blank = [None] * len(dates)
+
+    def column(name: str) -> list[Any]:
+        # A variable the endpoint does not serve comes back absent rather than
+        # as an error, so every column falls back to nulls. The forecast
+        # endpoint carries soil moisture; some archive windows do not.
+        return daily.get(name) or blank
+
+    rain = column("precipitation_sum")
+    tmax = column("temperature_2m_max")
+    tmin = column("temperature_2m_min")
+    soil_surface = column("soil_moisture_0_to_7cm_mean")
+    soil_root = column("soil_moisture_7_to_28cm_mean")
+    soil_temp = column("soil_temperature_0_to_7cm_mean")
+    et0 = column("et0_fao_evapotranspiration")
+
     return [
         {
             "obs_date": date.fromisoformat(d),
@@ -127,6 +148,10 @@ def _rows_from_payload(payload: dict[str, Any], mandi_id: int,
             "rainfall_mm": rain[i],
             "tmax_c": tmax[i],
             "tmin_c": tmin[i],
+            "soil_moisture_surface": soil_surface[i],
+            "soil_moisture_root": soil_root[i],
+            "soil_temp_c": soil_temp[i],
+            "et0_mm": et0[i],
             "is_forecast": is_forecast,
         }
         for i, d in enumerate(dates)

@@ -28,6 +28,7 @@ from api.routers import (
     compare,
     forecast,
     history,
+    irrigation,
     locations,
     mandis,
     prices,
@@ -111,7 +112,8 @@ async def _known(request: Request, exc: BhavSetuError) -> JSONResponse:
 
 
 for module in (mandis, prices, forecast, recommend, compare, accuracy,
-               transparency, history, community, admin, auth, locations):
+               transparency, history, community, admin, auth, locations,
+               irrigation):
     app.include_router(module.router, prefix="/api/v1")
 
 

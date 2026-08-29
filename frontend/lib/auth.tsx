@@ -47,10 +47,13 @@ export interface OtpChallenge {
   channel: string;
   /** Only present while `otp.channel: log` — the demo path, never production. */
   devCode?: string;
+  /** Masked address the code was emailed to, when it really was emailed. */
+  sentTo?: string;
 }
 
 export interface RegistrationDetails {
   name?: string;
+  email?: string;
   village?: string;
   district?: string;
   language?: Language;
@@ -63,7 +66,7 @@ interface AuthState {
   ready: boolean;
   language: Language;
   setLanguage: (l: Language) => void;
-  requestOtp: (phone: string) => Promise<OtpChallenge>;
+  requestOtp: (phone: string, email?: string) => Promise<OtpChallenge>;
   verifyOtp: (phone: string, code: string, details?: RegistrationDetails) => Promise<Farmer>;
   updateProfile: (details: RegistrationDetails) => Promise<Farmer>;
   logout: () => void;
@@ -157,9 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const requestOtp = useCallback(
-    (phone: string) => call<OtpChallenge>("/auth/request-otp", {
+    (phone: string, email?: string) => call<OtpChallenge>("/auth/request-otp", {
       method: "POST",
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ phone, email }),
     }),
     [],
   );

@@ -94,6 +94,9 @@ class Challenge:
     channel: str
     #: Populated only when `channel == "log"`. Never set for real delivery.
     code: str | None = None
+    #: Where it was actually sent, when the channel is email. Masked for display
+    #: so a shoulder-surfer at a demo does not read the farmer's full address.
+    email: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -103,7 +106,19 @@ class Challenge:
         }
         if self.code is not None:
             out["devCode"] = self.code
+        if self.email:
+            out["sentTo"] = _mask_email(self.email)
         return out
+
+
+def _mask_email(email: str) -> str:
+    """r****h@gmail.com — enough to recognise your own address, not to read it."""
+    name, _, domain = email.partition("@")
+    if not domain:
+        return email
+    if len(name) <= 2:
+        return f"{name[:1]}***@{domain}"
+    return f"{name[0]}{'*' * (len(name) - 2)}{name[-1]}@{domain}"
 
 
 def normalise_phone(raw: str) -> str:
@@ -120,7 +135,7 @@ def normalise_phone(raw: str) -> str:
     )
 
 
-def request_otp(phone: str) -> Challenge:
+def request_otp(phone: str, email: str | None = None) -> Challenge:
     """Issue a code, or refuse if this number is asking too often."""
     phone = normalise_phone(phone)
     r = client()
@@ -146,6 +161,22 @@ def request_otp(phone: str) -> Challenge:
 
     # Deliberately does NOT log the code when a real channel is configured.
     log.info("otp_issued", phone=phone, channel=CHANNEL, ttl=TTL_SECONDS)
+
+    # Email delivery, when the farmer gave us an address and SMTP is set up.
+    #
+    # This is a real channel that works without deploying anything: the farmer
+    # types the code, so unlike a magic link there is no URL that has to be
+    # reachable from his device. SMS is the one delivery route we do NOT have —
+    # it needs a paid gateway and, in India, DLT sender-ID registration.
+    if email:
+        from auth import email_link             # noqa: PLC0415 — avoids a cycle
+
+        if email_link.smtp_configured():
+            address = email_link.normalise_email(email)
+            email_link.send_otp_email(address, code, TTL_SECONDS)
+            log.info("otp_emailed", phone=phone, email=address)
+            return Challenge(phone, TTL_SECONDS, "email", email=address)
+        log.warn("otp_email_skipped", reason="smtp_not_configured")
 
     if CHANNEL == DEV_CHANNEL:
         log.warn("otp_dev_code", phone=phone, code=code,

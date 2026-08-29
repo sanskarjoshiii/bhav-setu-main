@@ -293,6 +293,62 @@ class PoolJoinRequest(Wire):
     qty_qtl: float = Field(gt=0)
 
 
+# ── soil & groundwater (Phase 14) ─────────────────────────────────────────
+
+SoilStatus = Literal[
+    "saturated", "wet", "adequate", "dry", "critical", "unknown"
+]
+IrrigationAction = Literal[
+    "irrigate_now", "irrigate_soon", "wait", "hold_off", "waterlogged"
+]
+
+
+class SoilPoint(Wire):
+    """One day of the soil water record, for the trend chart."""
+
+    date: str
+    soil_moisture_root: float | None = None
+    soil_moisture_surface: float | None = None
+    et0_mm: float | None = None
+    rainfall_mm: float | None = None
+    is_forecast: bool = False
+
+
+class IrrigationAdvisory(Wire):
+    """The irrigation decision, the numbers behind it, and the trend."""
+
+    action: IrrigationAction
+    headline: str
+    headline_mr: str
+    detail: str
+    crop: str
+    mandi: str
+    as_of: str
+
+    soil_moisture: float | None = None
+    soil_status: SoilStatus = "unknown"
+    soil_temp_c: float | None = None
+
+    et0_7d_mm: float = 0.0
+    crop_demand_7d_mm: float = 0.0
+    rain_7d_mm: float = 0.0
+    deficit_7d_mm: float = 0.0
+    rain_forecast_7d_mm: float = 0.0
+
+    kc: float = 1.0
+    kc_is_assumed: bool = False
+    confidence: str = "low"
+
+    #: The thresholds the status was judged against, so the UI can draw the
+    #: refill line on the chart rather than hardcoding a number that then
+    #: drifts from config/irrigation.yaml.
+    field_capacity: float = 0.30
+    refill_point: float = 0.20
+    wilting_point: float = 0.12
+
+    series: list[SoilPoint] = Field(default_factory=list)
+
+
 # ── errors ────────────────────────────────────────────────────────────────
 
 class ErrorResponse(Wire):

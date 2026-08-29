@@ -7,12 +7,12 @@ else
 endif
 
 .PHONY: up down install setup export-model initdb backfill collect train train-dry evaluate-baseline backtest api web seed test \
-        check-product reset-demo check-phase10 \
+        check-product reset-demo check-phase10 restore-model \
         check-data check-data-csv build-dataset check-phaseB2 \
         check-phase0 check-phase1 check-phase2 check-phase3 check-phase4 \
         check-phaseA0 check-phaseA1 check-phaseA2 check-phaseA3 \
         check-phase5 check-phase6 check-phase7 check-phase8 check-phase9 \
-        check-frontend check-phase11 check-phase12
+        check-frontend check-phase11 check-phase12 check-phase14 soil calibrate-soil \n        history-backfill mongo-shell
 
 # ── infrastructure ─────────────────────────────────────────────────────────
 up:
@@ -39,6 +39,11 @@ setup:
 	@echo "  Ready. Now:  make api    (and in another terminal)  make web"
 	@echo "  Check it:    curl localhost:8000/api/v1/health"
 	@echo ""
+
+# Put the committed model back into model_registry. Without an active row there
+# the API answers 503 on every forecast, so this is the fix for that symptom.
+restore-model:
+	$(BIN)/python scripts/restore_model.py
 
 # Save the current model_registry rows into the repo, so a clone can serve the
 # committed model without retraining.
@@ -170,3 +175,27 @@ check-phase11:
 
 check-phase12:
 	cd backend && ../$(BIN)/python -m pytest tests/test_phase12_demo.py -v
+
+# ── Phase 14 — soil & groundwater ──────────────────────────────────────────
+# Refresh the weather pull, which is where soil moisture and ET0 come from.
+# The forecast half expires within sixteen days, so the irrigation advisory
+# goes stale unless this runs; a weekly cron is plenty.
+soil:
+	$(BIN)/python scripts/backfill.py --only weather --weather-from 2025-06-01
+
+# Re-derive the soil thresholds from the data actually ingested, and fail if
+# config/irrigation.yaml has drifted away from them.
+calibrate-soil:
+	$(BIN)/python scripts/calibrate_soil.py --check
+
+check-phase14:
+	cd backend && ../$(BIN)/python -m pytest tests/test_phase14_agronomy.py -v
+
+# ── Phase 15 — farmer history in MongoDB ───────────────────────────────────
+# Rebuild the documents from Postgres. Safe to re-run; --reset wipes first.
+history-backfill:
+	$(BIN)/python scripts/backfill_history.py
+
+# Open a shell on the history database.
+mongo-shell:
+	docker compose exec mongo mongosh -u bhav -p bhav --authenticationDatabase admin bhav_history

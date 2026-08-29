@@ -6,9 +6,11 @@ engine into one answer. This is the endpoint the whole product exists to serve.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+import history
 from api import deps
+from api.routers.auth import Farmer, optional_farmer
 from api.schemas import Recommendation, RecommendRequest
 from core.errors import InsufficientData
 from decision.engine import Lot, optimise
@@ -20,7 +22,8 @@ router = APIRouter(tags=["advice"])
 
 
 @router.post("/recommend", response_model=Recommendation)
-def recommend(request: RecommendRequest) -> Recommendation:
+def recommend(request: RecommendRequest,
+              farmer: Farmer | None = Depends(optional_farmer)) -> Recommendation:
     commodity_id, crop_name = deps.resolve_commodity(request.crop)
 
     origin = None
@@ -72,4 +75,16 @@ def recommend(request: RecommendRequest) -> Recommendation:
         reason=reason,
         reason_mr=reason_mr,
     )
-    return Recommendation.model_validate(plan.to_dict())
+    wire = Recommendation.model_validate(plan.to_dict())
+
+    # Anonymous use is fine and stays anonymous; a signed-in farmer gets the
+    # advice written to his history so he can see what he was told, and when.
+    if farmer is not None:
+        target = wire.tranches[0].mandi if wire.tranches else anchor.mandi
+        history.record_recommendation(
+            farmer, crop=crop_name, qty_qtl=request.qty_qtl, mandi=target,
+            action=wire.action, expected_gain=wire.expected_gain,
+            confidence=wire.confidence,
+            payload={"headline": wire.headline, "grade": request.grade,
+                     "storage": request.storage, "riskProfile": request.risk_profile})
+    return wire

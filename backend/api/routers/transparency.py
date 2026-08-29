@@ -12,10 +12,12 @@ import statistics
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 
+import history
 from api import deps
+from api.routers.auth import Farmer, optional_farmer
 from api.schemas import SaleReport, SaleReportRequest, TransparencyScore
 from core.db import get_conn
 
@@ -64,11 +66,17 @@ def list_sale_reports(limit: int = Query(60, ge=1, le=500)) -> list[SaleReport]:
 
 
 @router.post("/sale-reports", response_model=SaleReport, status_code=201)
-def create_sale_report(request: SaleReportRequest) -> SaleReport:
+def create_sale_report(request: SaleReportRequest,
+                       signed_in: Farmer | None = Depends(optional_farmer)) -> SaleReport:
     mandi_id, mandi_name, _ = deps.resolve_mandi(request.mandi)
     deps.resolve_commodity(request.crop)   # validate the crop exists
 
+    farmer_id: int | None = None
     with get_conn() as conn:
+        # A signed-in farmer owns the report; the name/village handle is only
+        # the fallback for the anonymous form.
+        farmer_id = (signed_in.id if signed_in is not None
+                     else _farmer_id(conn, request.farmer, request.village))
         new_id = conn.execute(text("""
             INSERT INTO sale_reports
                 (farmer_id, mandi_id, sale_date, quantity_qtl, channel,
@@ -78,12 +86,21 @@ def create_sale_report(request: SaleReportRequest) -> SaleReport:
                     :quoted, :received, :followed, :verification, 'web')
             RETURNING id
         """), {
-            "farmer_id": _farmer_id(conn, request.farmer, request.village),
+            "farmer_id": farmer_id,
             "mandi_id": mandi_id,
             "sale_date": date.today(), "qty": request.qtl,
             "quoted": request.quoted_per_qtl, "received": request.received_per_qtl,
             "followed": request.followed_advice, "verification": request.verification,
         }).scalar_one()
+
+    if farmer_id is not None:
+        snapshot = history.snapshot_from_db(farmer_id)
+        if snapshot:
+            history.record_sale(
+                snapshot, crop=request.crop, mandi=mandi_name, qtl=request.qtl,
+                quoted_per_qtl=request.quoted_per_qtl,
+                received_per_qtl=request.received_per_qtl,
+                followed_advice=request.followed_advice)
 
     gap = (request.received_per_qtl - request.quoted_per_qtl) / request.quoted_per_qtl * 100.0
     return SaleReport(

@@ -31,6 +31,8 @@ export default function SignupPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
   const [district, setDistrict] = useState("");
   const [village, setVillage] = useState("");
@@ -63,8 +65,9 @@ export default function SignupPage() {
     setBusy(true);
     setError(null);
     try {
-      const challenge = await requestOtp(phone);
+      const challenge = await requestOtp(phone, email || undefined);
       setDevCode(challenge.devCode ?? null);
+      setSentTo(challenge.sentTo ?? null);
       setStep(3);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not send the code");
@@ -80,6 +83,7 @@ export default function SignupPage() {
     try {
       await verifyOtp(phone, otp, {
         name, village, district, language, riskProfile: risk,
+        ...(email ? { email } : {}),
       });
       setLanguage(language);
       router.push("/advisor");
@@ -150,6 +154,21 @@ export default function SignupPage() {
               <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)}
                      placeholder="98765 43210" inputMode="tel" autoComplete="tel"
                      required className="input" />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="email">
+                Email <span className="font-normal normal-case tracking-normal text-muted">
+                  — optional, but we can only send the code here
+                </span>
+              </label>
+              <input id="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                     placeholder="you@gmail.com" type="email" inputMode="email"
+                     autoComplete="email" className="input" />
+              <p className="mt-1 text-[0.74rem] text-muted">
+                We have no SMS gateway yet, so without an email the code is only
+                shown on screen.
+              </p>
             </div>
 
             <div>
@@ -270,7 +289,9 @@ export default function SignupPage() {
             <div>
               <h2 className="h3">Confirm your number</h2>
               <p className="mt-1 text-[0.86rem] text-muted">
-                Step 3 of 3 — a six-digit code was sent to {phone}.
+                Step 3 of 3 — {sentTo
+                  ? <>a six-digit code was emailed to <strong>{sentTo}</strong>.</>
+                  : <>a six-digit code was generated for {phone}.</>}
               </p>
             </div>
 

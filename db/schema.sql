@@ -84,6 +84,15 @@ CREATE TABLE weather_daily (
     tmax_c       NUMERIC(5,2),
     tmin_c       NUMERIC(5,2),
     humidity_pct NUMERIC(5,2),
+    -- Soil & groundwater (Phase 14). Volumetric water content, m3/m3: the
+    -- fraction of soil volume that is water. Roughly 0.10 is wilting point and
+    -- 0.30 field capacity for a loam, so 0.49 after monsoon rain is saturated.
+    soil_moisture_surface NUMERIC(5,3),   -- 0-7 cm, dries first, drives crusting
+    soil_moisture_root    NUMERIC(5,3),   -- 7-28 cm, the zone a crop drinks from
+    soil_temp_c           NUMERIC(5,2),   -- 0-7 cm
+    -- FAO-56 reference evapotranspiration, mm/day: how much water a reference
+    -- grass surface loses. Multiply by a crop coefficient for actual demand.
+    et0_mm                NUMERIC(5,2),
     is_forecast  BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (obs_date, mandi_id)
 );
@@ -162,6 +171,10 @@ CREATE UNIQUE INDEX idx_model_one_active ON model_registry (is_active) WHERE is_
 CREATE TABLE farmers (
     id             BIGSERIAL PRIMARY KEY,
     phone_e164     TEXT UNIQUE NOT NULL,
+    -- Email sign-in (Phase 15). Optional: a farmer may only ever use a phone.
+    -- Nullable + UNIQUE lets many rows have no email while no two share one.
+    email          TEXT UNIQUE,
+    email_verified_at TIMESTAMPTZ,
     name           TEXT,
     language       TEXT DEFAULT 'mr',       -- mr | hi | en
     village        TEXT,

@@ -126,6 +126,7 @@ The full chain was run, not just the fetch:
 | CEDA pull, 4 districts × 28 crops × 4.8 yr | **121,410 rows** (185 requests, 0 failures) |
 | Ingested to Postgres (13 configured crops) | **50,604 price observations**, 91.6% with arrivals |
 | Weather backfill (Open-Meteo) | **35,292 rows**, all 17 mandis |
+| Soil & ET0 backfill (Open-Meteo, Phase 14) | **7,922 rows** from Jun 2025, all 17 mandis |
 | Training matrix | **176,221 rows × 45 features** — all gates passed |
 | Baseline floor recorded | `baseline-v1`, 50 series, in `model_registry` |
 
@@ -254,6 +255,51 @@ If a judge asks "is this market-level?", the answer is: *the forecast is
 district-level and the money is market-level, and we can show you exactly where
 the line is.* That is a much better answer than a market-level model trained on
 70 dates.
+
+---
+
+## Soil & groundwater (Phase 14)
+
+Same provider, same requests — Open-Meteo serves soil moisture and reference
+evapotranspiration from the *identical* archive and forecast calls we already
+made for rainfall and temperature, so this stream cost **zero extra API
+requests**. Four daily variables were added to `config/sources.yaml`:
+
+| Variable | Column | What it is |
+|---|---|---|
+| `soil_moisture_0_to_7cm_mean` | `soil_moisture_surface` | Dries first; drives crusting |
+| `soil_moisture_7_to_28cm_mean` | `soil_moisture_root` | **The zone a crop drinks from** |
+| `soil_temperature_0_to_7cm_mean` | `soil_temp_c` | Surface soil temperature |
+| `et0_fao_evapotranspiration` | `et0_mm` | FAO-56 reference ET, mm/day |
+
+Both endpoints serve all four; verified against the live API before the schema
+was changed.
+
+**The measured distribution, and why it matters.** Across 7,905 observed days
+the root-zone series is bimodal:
+
+| | Value |
+|---|---:|
+| Monsoon plateau (Jul–Sep) | **0.430** |
+| Dry-season plateau (Dec–May) | **0.268** |
+| p05 / p25 / p50 / p85 | 0.180 / 0.279 / 0.313 / 0.461 |
+| Observed min / max | 0.123 / 0.517 |
+
+This is a **higher scale than soil-physics tables assume** for a medium loam,
+and it never approaches the textbook wilting point of 0.12. Thresholds
+calibrated from a table therefore misclassify the dry season as wet — which is
+exactly what happened, and is written up in
+[STATUS.md](STATUS.md#phase-14--soil--groundwater). The thresholds in
+`config/irrigation.yaml` are now percentiles of this series, re-derivable with
+`python scripts/calibrate_soil.py`.
+
+**Crop coefficients** are FAO-56 Table 12 mid-season values (Kc_mid), one per
+configured crop. Pomegranate has no table row; its 0.90 is the midpoint of the
+comparable citrus/stone-fruit range and is flagged as an assumption everywhere
+it is used.
+
+**This stream does not feed the price model.** It is a second question answered
+from data already fetched, not an addition to the forecast feature set.
 
 ---
 
