@@ -1,12 +1,31 @@
 # secrets
 .env
 
-# data
-data/raw/
-data/artifacts/
+# data — bulky and regenerable by default, with three deliberate exceptions so
+# a fresh clone can run the product without a 40-minute CEDA pull and an hour of
+# training. See SETUP.md.
+#
+# Two gitignore traps avoided here:
+#   1. `dir/*` not `dir/` — git cannot re-include a file whose PARENT DIRECTORY
+#      is excluded, so the contents must be excluded instead.
+#   2. no trailing comments — `!file  # why` makes the comment part of the
+#      pattern, and the negation silently does nothing.
 agmarknet-india-commodity-prices-2024-2025/
+
+data/raw/*
 !data/raw/.gitkeep
+# the CEDA pull, ~10 MB
+!data/raw/mandi_history.csv
+
+data/artifacts/*
 !data/artifacts/.gitkeep
+# registry rows git can carry but Postgres cannot
+!data/artifacts/model_registry.json
+# the promoted model, ~15 MB
+!data/artifacts/models/
+
+# still ignored: the 33 MB CEDA response cache and the 13 MB training matrix.
+# Both are derived — build_dataset.py rebuilds the matrix from the database.
 
 # python
 __pycache__/

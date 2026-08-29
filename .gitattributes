@@ -1,0 +1,19 @@
+# The LAST matching rule wins, so the general case goes first and the
+# exceptions after it. Written the other way round, `* text=auto` silently
+# overrides everything above it.
+
+# Normalise to LF in the repo, check out native. This is what stops a Windows
+# editor turning a whole file into one big diff.
+* text=auto
+
+# ── exceptions: must survive a round trip byte for byte ────────────────────
+
+# LightGBM boosters are text, so git would happily normalise their line endings
+# on checkout — LF on a teammate's Linux box, CRLF back on Windows. Parsing
+# survives that, but a "modified" diff on every clone does not. `-text` leaves
+# them exactly as committed.
+data/artifacts/models/** -text -diff
+
+# The CEDA pull: 121,410 rows of real prices. Never worth diffing, and stable
+# bytes mean a teammate's checksum matches ours.
+data/raw/mandi_history.csv -text -diff

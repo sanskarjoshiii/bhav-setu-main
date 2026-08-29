@@ -6,7 +6,7 @@ else
 	BIN := $(VENV)/bin
 endif
 
-.PHONY: up down install initdb backfill collect train train-dry evaluate-baseline backtest api web seed test \
+.PHONY: up down install setup export-model initdb backfill collect train train-dry evaluate-baseline backtest api web seed test \
         check-product reset-demo check-phase10 \
         check-data check-data-csv build-dataset check-phaseB2 \
         check-phase0 check-phase1 check-phase2 check-phase3 check-phase4 \
@@ -26,6 +26,24 @@ install:
 	$(PY) -m venv $(VENV)
 	$(BIN)/python -m pip install --upgrade pip
 	$(BIN)/python -m pip install -r backend/requirements.txt
+
+# ── one command from a fresh clone to a running product ────────────────────
+# Assumes `make up` has Postgres and Redis healthy. Roughly three minutes, and
+# every step is safe to re-run. See SETUP.md.
+setup:
+	$(BIN)/python scripts/init_db.py --force
+	$(BIN)/python scripts/backfill.py --skip-ceda --skip-agmarknet
+	$(BIN)/python scripts/restore_model.py
+	$(BIN)/python scripts/seed_demo_data.py --reset
+	@echo ""
+	@echo "  Ready. Now:  make api    (and in another terminal)  make web"
+	@echo "  Check it:    curl localhost:8000/api/v1/health"
+	@echo ""
+
+# Save the current model_registry rows into the repo, so a clone can serve the
+# committed model without retraining.
+export-model:
+	$(BIN)/python scripts/restore_model.py --export
 
 # ── pipeline ───────────────────────────────────────────────────────────────
 initdb:
