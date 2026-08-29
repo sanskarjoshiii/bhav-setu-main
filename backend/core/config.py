@@ -32,6 +32,7 @@ REQUIRED_ENV: tuple[str, ...] = ("DATABASE_URL",)
 
 CONFIG_FILES: tuple[str, ...] = (
     "app",
+    "locations",
     "mandis",
     "crops",
     "cost_model",
@@ -151,6 +152,7 @@ class Settings:
     root: Path
     env: Env
     app: ConfigNode
+    locations: ConfigNode
     mandis: ConfigNode
     crops: ConfigNode
     cost_model: ConfigNode

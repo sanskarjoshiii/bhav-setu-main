@@ -1,0 +1,93 @@
+# Phase 10 — where a farmer says he is.
+#
+# Only the four districts we actually carry price data for. Offering a village in
+# Kolhapur would be dishonest: we would take his registration and then have
+# nothing to tell him. When CEDA's other twelve districts are pulled, add them
+# here and the signup form widens on its own.
+#
+# Coordinates are village centroids to about three decimals. They feed road
+# distance (ingestion/routing.py) and therefore transport cost, so a 2-3 km error
+# moves a 60 km trip's cost by a few percent — good enough to rank markets,
+# worth replacing with surveyed points before anyone quotes a rupee as exact.
+#
+# Villages were chosen as the well-known market-adjacent settlements in each
+# taluka, so a farmer recognises his own or one within a few kilometres of it.
+
+districts:
+  Nashik:
+    name_mr: नाशिक
+    lat: 19.9975
+    lon: 73.7898
+    villages:
+      - {name: Vinchur,            name_mr: विंचूर,        lat: 20.1058, lon: 74.3406}
+      - {name: Lasalgaon,          name_mr: लासलगाव,      lat: 20.1436, lon: 74.2372}
+      - {name: Niphad,             name_mr: निफाड,        lat: 20.0800, lon: 74.1100}
+      - {name: Pimpalgaon Baswant, name_mr: पिंपळगाव बसवंत, lat: 20.1697, lon: 73.9822}
+      - {name: Yeola,              name_mr: येवला,         lat: 20.0428, lon: 74.4894}
+      - {name: Chandvad,           name_mr: चांदवड,        lat: 20.3300, lon: 74.2450}
+      - {name: Manmad,             name_mr: मनमाड,         lat: 20.2500, lon: 74.4400}
+      - {name: Satana,             name_mr: सटाणा,         lat: 20.6000, lon: 74.2000}
+      - {name: Sinnar,             name_mr: सिन्नर,        lat: 19.8500, lon: 74.0000}
+      - {name: Dindori,            name_mr: दिंडोरी,       lat: 20.2000, lon: 73.8300}
+
+  Pune:
+    name_mr: पुणे
+    lat: 18.5204
+    lon: 73.8567
+    villages:
+      - {name: Junnar,      name_mr: जुन्नर,     lat: 19.2090, lon: 73.8750}
+      - {name: Narayangaon, name_mr: नारायणगाव,  lat: 19.0700, lon: 73.9600}
+      - {name: Manchar,     name_mr: मंचर,       lat: 19.0000, lon: 73.9400}
+      - {name: Khed,        name_mr: खेड,        lat: 18.8500, lon: 73.8700}
+      - {name: Chakan,      name_mr: चाकण,       lat: 18.7600, lon: 73.8600}
+      - {name: Baramati,    name_mr: बारामती,    lat: 18.1514, lon: 74.5772}
+      - {name: Indapur,     name_mr: इंदापूर,    lat: 18.1200, lon: 75.0200}
+      - {name: Shirur,      name_mr: शिरूर,      lat: 18.8300, lon: 74.3700}
+      - {name: Daund,       name_mr: दौंड,       lat: 18.4600, lon: 74.5800}
+      - {name: Otur,        name_mr: ओतूर,       lat: 19.2400, lon: 73.9900}
+
+  Ahmednagar:
+    name_mr: अहमदनगर
+    lat: 19.0952
+    lon: 74.7496
+    villages:
+      - {name: Rahuri,     name_mr: राहुरी,     lat: 19.3900, lon: 74.6500}
+      - {name: Sangamner,  name_mr: संगमनेर,    lat: 19.5700, lon: 74.2100}
+      - {name: Shrirampur, name_mr: श्रीरामपूर, lat: 19.6200, lon: 74.6600}
+      - {name: Rahata,     name_mr: राहाता,     lat: 19.7100, lon: 74.4800}
+      - {name: Kopargaon,  name_mr: कोपरगाव,    lat: 19.8800, lon: 74.4800}
+      - {name: Parner,     name_mr: पारनेर,     lat: 19.0000, lon: 74.4400}
+      - {name: Shevgaon,   name_mr: शेवगाव,     lat: 19.3400, lon: 75.2300}
+      - {name: Pathardi,   name_mr: पाथर्डी,    lat: 19.1700, lon: 75.1800}
+      - {name: Akole,      name_mr: अकोले,      lat: 19.5300, lon: 73.9300}
+      - {name: Newasa,     name_mr: नेवासा,     lat: 19.5400, lon: 74.9300}
+
+  Solapur:
+    name_mr: सोलापूर
+    lat: 17.6599
+    lon: 75.9064
+    villages:
+      - {name: Pandharpur,  name_mr: पंढरपूर,   lat: 17.6790, lon: 75.3300}
+      - {name: Barshi,      name_mr: बार्शी,    lat: 18.2333, lon: 75.6900}
+      - {name: Akluj,       name_mr: अकलूज,     lat: 17.8800, lon: 75.0200}
+      - {name: Mangalwedha, name_mr: मंगळवेढा,  lat: 17.5200, lon: 75.4500}
+      - {name: Sangola,     name_mr: सांगोला,   lat: 17.4400, lon: 75.1900}
+      - {name: Karmala,     name_mr: करमाळा,    lat: 18.4100, lon: 75.1900}
+      - {name: Madha,       name_mr: माढा,      lat: 18.0300, lon: 75.5100}
+      - {name: Malshiras,   name_mr: माळशिरस,   lat: 17.8500, lon: 74.9300}
+      - {name: Mohol,       name_mr: मोहोळ,     lat: 17.8200, lon: 75.6600}
+      - {name: Kurduwadi,   name_mr: कुर्डूवाडी, lat: 18.0900, lon: 75.4200}
+
+# ── OTP (Phase 10) ──────────────────────────────────────────────────────────
+otp:
+  length: 6
+  ttl_seconds: 600          # ten minutes, then it is dead
+  max_attempts: 5           # wrong guesses before the code is burned
+  resend_cooldown_seconds: 60
+  rate_limit_per_hour: 10   # requests per phone number
+  # Delivery. `log` prints the code to the server log and returns it in the
+  # response, which is what a demo needs and what a production build must never
+  # do — `whatsapp` becomes available in Phase 11 and the switch is this line.
+  #   log      — dev: code is returned to the caller
+  #   whatsapp — real delivery over the Meta Cloud API
+  channel: log
