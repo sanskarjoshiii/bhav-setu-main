@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import PageHeader from "@/components/PageHeader";
 import Section from "@/components/Section";
 import NetComparisonTable from "@/components/NetComparisonTable";
 import StatCard from "@/components/StatCard";
 import type { Grade, MandiComparison, Storage } from "@/lib/types";
-import { getComparison } from "@/lib/api";
+import { getComparison, getMandis } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
+import { useAuth } from "@/lib/auth";
 import { CROPS } from "@/lib/mock/crops";
 import { cx, rupees } from "@/lib/format";
 
@@ -26,6 +28,22 @@ export default function ComparePage() {
   const [storage, setStorage] = useState<Storage>("shed");
   const [cropId, setCropId] = useState("onion");
   const [rows, setRows] = useState<MandiComparison[]>([]);
+
+  const { user } = useAuth();
+  // Coordinates for the map. The comparison rows carry names and distances but
+  // not lat/lon, so this is the one extra call the page makes.
+  const markets = useApi(() => getMandis(cropId), [cropId]);
+  const mapMarkets = useMemo(
+    () =>
+      (markets.data ?? [])
+        .filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lon))
+        .map((m) => ({
+          id: m.id, name: m.name, district: m.district,
+          lat: m.lat, lon: m.lon, todayModal: m.todayModal,
+          distanceKm: m.distanceKm, arrivalQtl: m.arrivalQtl,
+        })),
+    [markets.data],
+  );
 
   useEffect(() => {
     void getComparison(qty, days, grade, storage, cropId).then(setRows);
@@ -164,7 +182,15 @@ export default function ComparePage() {
       </Section>
 
       <Section title="Distance is the hidden cost" description="Your village is the white marker.">
-        <MandiMap />
+        <MandiMap
+          markets={mapMarkets}
+          origin={
+            user?.lat != null && user?.lon != null
+              ? { name: user.village || user.district, lat: user.lat, lon: user.lon }
+              : null
+          }
+          highlightDistrict={user?.district ?? null}
+        />
       </Section>
     </>
   );

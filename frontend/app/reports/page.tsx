@@ -2,13 +2,14 @@
 
 import PageHeader from "@/components/PageHeader";
 import Section from "@/components/Section";
-import { SALE_REPORTS } from "@/lib/mock/transparency";
+import { getTransparency } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
+import { AsyncBoundary } from "@/components/AsyncBoundary";
 import { plainPct, qtl, rupees } from "@/lib/format";
 import { longDate } from "@/lib/seed";
 
-/** TODO (Phase 8): GET /api/v1/sale-reports?farmer=me */
 export default function MyReportsPage() {
-  const mine = SALE_REPORTS.slice(0, 6);
+  const state = useApi(getTransparency, []);
 
   return (
     <>
@@ -21,6 +22,13 @@ export default function MyReportsPage() {
       </PageHeader>
 
       <Section>
+        {(state.loading || state.error) && (
+          <div className="mb-4">
+            <AsyncBoundary state={state} loadingLabel="Loading your sale reports…">
+              {() => null}
+            </AsyncBoundary>
+          </div>
+        )}
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
@@ -37,7 +45,7 @@ export default function MyReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {mine.map((r) => (
+                {(state.data?.reports ?? []).slice(0, 12).map((r) => (
                   <tr key={r.id} className="border-b border-line/70 last:border-0">
                     <td className="td font-mono text-[0.78rem] text-muted">{r.id}</td>
                     <td className="td font-medium">{r.mandi}</td>

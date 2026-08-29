@@ -7,11 +7,9 @@ import { ArrowRight, ArrowUpRight, Scale, ShieldCheck, TrendingUp } from "lucide
 import ForecastChart from "@/components/ForecastChart";
 import Section from "@/components/Section";
 import StatCard from "@/components/StatCard";
-import { HOME_MANDIS as MANDIS } from "@/lib/mock/mandis";
-import { seriesFor } from "@/lib/mock/prices";
-import { ACCURACY } from "@/lib/mock/accuracy";
-import { TRANSPARENCY_TOTALS } from "@/lib/mock/transparency";
-import { CROPS } from "@/lib/mock/crops";
+import { getAccuracy, getCrops, getForecast, getHealth, getMandis, getLocations } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { useApi } from "@/lib/useApi";
 import { compactRupees, cx, pct, rupees } from "@/lib/format";
 
 const MandiMap = dynamic(() => import("@/components/MandiMap"), {
@@ -38,9 +36,65 @@ const PILLARS = [
 ];
 
 export default function HomePage() {
-  const [active, setActive] = useState(MANDIS[0].name);
-  const series = useMemo(() => seriesFor(active), [active]);
-  const mandi = MANDIS.find((m) => m.name === active)!;
+  const [active, setActive] = useState<string>("");
+
+  const { user } = useAuth();
+  const health = useApi(getHealth, []);
+  const locationState = useApi(getLocations, []);
+  const accuracy = useApi(getAccuracy, []);
+  const crops = useApi(getCrops, []);
+  // The hero chart opens on a crop we can actually forecast. /crops is sorted
+  // by name, and the first name alphabetically is banana — thin enough that the
+  // forecast refuses, which is correct behaviour but a poor first impression.
+  // Prefer the storable staples, which are dense in every district.
+  const PREFERRED = ["onion", "tomato", "potato"];
+  const available = crops.data ?? [];
+  const heroCrop =
+    PREFERRED.find((k) => available.some((c) => c.key === k && c.hasForecast)) ??
+    available.find((c) => c.hasForecast)?.key ??
+    "onion";
+  const prices = useApi(
+    () => (crops.data ? getMandis(heroCrop) : Promise.resolve([])),
+    [heroCrop, crops.data !== null],
+  );
+
+  // Only markets actually quoting this crop today.
+  const MANDIS = (prices.data ?? []).filter((m) => m.todayModal > 0);
+  const activeName = active || MANDIS[0]?.name || "";
+  const mandi = MANDIS.find((m) => m.name === activeName) ?? MANDIS[0];
+
+  const chart = useApi(
+    () => (mandi ? getForecast(mandi.name, heroCrop) : Promise.resolve([])),
+    [mandi?.name, heroCrop],
+  );
+  const series = chart.data ?? [];
+
+  // Only metrics we have actually measured go on this page. The backtest uplift
+  // lives on /accuracy with whatever sign it really has, rather than being
+  // promoted to a headline here.
+  // Every market we carry a price for, for the map below. `getMandis(crop)`
+  // already returns coordinates and today's modal, so no extra request.
+  const mapMarkets = useMemo(
+    () =>
+      (prices.data ?? [])
+        .filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lon))
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          district: m.district,
+          lat: m.lat,
+          lon: m.lon,
+          todayModal: m.todayModal,
+          distanceKm: m.distanceKm,
+          arrivalQtl: m.arrivalQtl,
+        })),
+    [prices.data],
+  );
+
+  const h7 = accuracy.data?.pinball.find((m) => m.horizon === 7);
+  const mape7 = accuracy.data?.mape.find((m) => m.horizon === 7);
+  const skill7 =
+    h7 && h7.naive ? ((h7.naive - h7.model) / h7.naive) * 100 : null;
 
   return (
     <>
@@ -70,9 +124,16 @@ export default function HomePage() {
           </div>
 
           <div className="card p-6">
+            {mandi ? (<>
             <div className="flex items-baseline justify-between">
               <div>
-                <p className="eyebrow">{mandi.name} · onion</p>
+                {/* The crop actually being charted, not whichever sorts first
+                    alphabetically — those disagree, and the label was naming a
+                    crop whose prices were not on screen. */}
+                <p className="eyebrow">
+                  {mandi.name} ·{" "}
+                  {(crops.data?.find((c) => c.key === heroCrop)?.name ?? heroCrop).toLowerCase()}
+                </p>
                 <p className="mt-2 text-[2.1rem] font-bold tracking-[-0.02em]">
                   {rupees(mandi.todayModal)}
                   <span className="text-[0.9rem] font-medium text-muted">/quintal</span>
@@ -106,6 +167,9 @@ export default function HomePage() {
             <p className="mt-3 text-[0.74rem] text-muted">
               Solid line is what happened. Dashed line with the shaded band is the next 15 days.
             </p>
+            </>) : (
+              <div className="h-[320px] animate-pulse rounded-xl bg-panel/40" />
+            )}
           </div>
         </div>
       </div>
@@ -114,25 +178,29 @@ export default function HomePage() {
       <Section>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Uplift vs selling immediately"
-            value={`+${ACCURACY.upliftPct}%`}
-            hint="Backtested over the last 6 months"
+            label="Better than “same as last week”"
+            value={skill7 !== null ? `${skill7.toFixed(0)}%` : "—"}
+            hint="Lower forecast error at 7 days"
             tone="up"
           />
           <StatCard
-            label="Win rate"
-            value={`${Math.round(ACCURACY.winRate * 100)}%`}
-            hint="Scenarios that beat the baseline"
+            label="Forecast error at 7 days"
+            value={mape7 ? `${mape7.model.toFixed(1)}%` : "—"}
+            hint={mape7 ? `Naive baseline: ${mape7.naive.toFixed(1)}%` : ""}
           />
           <StatCard
-            label="Forecast error at 7 days"
-            value={`${ACCURACY.mape[2].model}%`}
-            hint={`Naive baseline: ${ACCURACY.mape[2].naive}%`}
+            label="Band coverage"
+            value={accuracy.data ? accuracy.data.picp.toFixed(2) : "—"}
+            hint="Target ≈ 0.80 — how honest the range is"
           />
           <StatCard
             label="Crops covered"
-            value={String(CROPS.length)}
-            hint="Vegetables and fruits"
+            value={health.data ? String(health.data.crops) : "—"}
+            hint={
+              health.data
+                ? `${health.data.mandis} markets, ${health.data.priceRows.toLocaleString("en-IN")} price records`
+                : "Vegetables and fruits"
+            }
           />
         </div>
       </Section>
@@ -193,7 +261,7 @@ export default function HomePage() {
                       {pct(m.changePct)}
                     </td>
                     <td className="td text-right tabular-nums text-muted">
-                      {m.arrivalQtl.toLocaleString("en-IN")} qtl
+                      {Math.round(m.arrivalQtl).toLocaleString("en-IN")} qtl
                     </td>
                     <td className="td">
                       <span className="chip capitalize">{m.liquidity}</span>
@@ -208,10 +276,31 @@ export default function HomePage() {
 
       {/* Map */}
       <Section
-        title="Where these markets are"
-        description="Distance is why the highest price is not always the best market."
+        title={
+          user?.district
+            ? `Markets near ${user.village || user.district}`
+            : "Where these markets are"
+        }
+        description={
+          user?.district
+            ? "Your village is the white marker. Each line is a trip, and the diesel on it is what the compare page charges you."
+            : "Distance is why the highest price is not always the best market. Sign in and we will centre this on your village."
+        }
       >
-        <MandiMap />
+        <MandiMap
+          markets={mapMarkets}
+          origin={
+            user?.lat != null && user?.lon != null
+              ? { name: user.village || user.district, lat: user.lat, lon: user.lon }
+              : null
+          }
+          highlightDistrict={user?.district ?? null}
+          height={460}
+        />
+        <p className="mt-3 text-[0.78rem] text-muted">
+          {mapMarkets.length} market{mapMarkets.length === 1 ? "" : "s"} across{" "}
+          {new Set(mapMarkets.map((m) => m.district)).size} districts, with today’s price.
+        </p>
       </Section>
 
       {/* CTA */}

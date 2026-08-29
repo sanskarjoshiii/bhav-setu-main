@@ -5,8 +5,9 @@ import { BadgeCheck, Camera, FileText, Users } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import Section from "@/components/Section";
 import StatCard from "@/components/StatCard";
-import { SALE_REPORTS, TRANSPARENCY_SCORES, TRANSPARENCY_TOTALS } from "@/lib/mock/transparency";
-import { MANDIS } from "@/lib/mock/mandis";
+import { getMandis, getTransparency } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
+import { ErrorState, LoadingState } from "@/components/AsyncBoundary";
 import { cx, plainPct, qtl, rupees } from "@/lib/format";
 import { longDate } from "@/lib/seed";
 
@@ -18,6 +19,24 @@ const VERIFICATION_ICON = {
 
 export default function TransparencyPage() {
   const [filter, setFilter] = useState<string>("all");
+  const state = useApi(getTransparency, []);
+  const mandiState = useApi(() => getMandis(), []);
+
+  const SALE_REPORTS = state.data?.reports ?? [];
+  const TRANSPARENCY_SCORES = state.data?.scores ?? [];
+  const MANDIS = mandiState.data ?? [];
+
+  // Totals are derived from the reports themselves rather than stored, so the
+  // headline numbers cannot drift away from the table underneath them.
+  const gaps = SALE_REPORTS.map((r) => r.gapPct).sort((a, b) => a - b);
+  const TRANSPARENCY_TOTALS = {
+    reports: SALE_REPORTS.length,
+    farmers: new Set(SALE_REPORTS.map((r) => r.farmer)).size,
+    villages: new Set(SALE_REPORTS.map((r) => r.village).filter(Boolean)).size,
+    medianGap: gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0,
+    followedAdvice: SALE_REPORTS.filter((r) => r.followedAdvice).length,
+  };
+
   const reports = filter === "all" ? SALE_REPORTS : SALE_REPORTS.filter((r) => r.mandi === filter);
 
   return (
@@ -35,7 +54,7 @@ export default function TransparencyPage() {
           <StatCard label="Median gap" value={plainPct(TRANSPARENCY_TOTALS.medianGap)} hint="Quoted vs received" tone="down" />
           <StatCard
             label="Followed our advice"
-            value={plainPct((TRANSPARENCY_TOTALS.followedAdvice / TRANSPARENCY_TOTALS.reports) * 100, 0)}
+            value={plainPct(TRANSPARENCY_TOTALS.reports ? (TRANSPARENCY_TOTALS.followedAdvice / TRANSPARENCY_TOTALS.reports) * 100 : 0, 0)}
             hint={`${TRANSPARENCY_TOTALS.followedAdvice} of ${TRANSPARENCY_TOTALS.reports} reports`}
           />
         </div>

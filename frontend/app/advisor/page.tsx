@@ -10,7 +10,8 @@ import LotForm from "@/components/LotForm";
 import RecommendationCard from "@/components/RecommendationCard";
 import ForecastChart from "@/components/ForecastChart";
 import type { MandiComparison, PricePoint, Recommendation } from "@/lib/types";
-import { getComparison, getForecast, postRecommend, type LotInput } from "@/lib/api";
+import { ApiError, getComparison, getForecast, postRecommend, type LotInput } from "@/lib/api";
+import { ErrorState } from "@/components/AsyncBoundary";
 import { DEFAULT_LOT } from "@/lib/mock/recommendation";
 import { cropById } from "@/lib/mock/crops";
 import { useHistory } from "@/lib/history";
@@ -29,18 +30,39 @@ function AdvisorInner() {
   const [series, setSeries] = useState<PricePoint[]>([]);
   const [rows, setRows] = useState<MandiComparison[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
 
   async function run(next: LotInput) {
     setLoading(true);
+    setError(null);
     setLot(next);
-    const [r, cmp] = await Promise.all([
-      postRecommend(next),
-      getComparison(next.qtyQtl, 0, next.grade, next.storage, next.cropId),
-    ]);
+
+    let r: Recommendation;
+    let cmp: MandiComparison[];
+    try {
+      [r, cmp] = await Promise.all([
+        postRecommend(next),
+        getComparison(next.qtyQtl, 0, next.grade, next.storage, next.cropId),
+      ]);
+    } catch (err) {
+      // The backend refuses with a sentence — "too little history for mango at
+      // Solapur" — and that sentence is more useful than a blank panel.
+      setError(err instanceof ApiError ? err : new ApiError(0, "Could not build a recommendation"));
+      setRec(null);
+      setRows([]);
+      setSeries([]);
+      setLoading(false);
+      return;
+    }
+
     setRec(r);
     setRows(cmp);
-    const best = r.tranches[0]?.mandi ?? cmp[0].mandi;
-    setSeries(await getForecast(best, next.cropId));
+    const best = r.tranches[0]?.mandi ?? cmp[0]?.mandi;
+    try {
+      if (best) setSeries(await getForecast(best, next.cropId));
+    } catch {
+      setSeries([]);   // the plan still stands without its chart
+    }
     setLoading(false);
 
     const crop = cropById(next.cropId);
@@ -93,7 +115,9 @@ function AdvisorInner() {
           </div>
 
           <div className="space-y-6">
-            {loading && !rec ? (
+            {error ? (
+              <ErrorState error={error} onRetry={() => void run(lot)} />
+            ) : loading && !rec ? (
               <div className="card h-[440px] animate-pulse bg-panel/40" />
             ) : rec ? (
               <RecommendationCard rec={rec} />
