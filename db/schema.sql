@@ -299,3 +299,32 @@ FROM price_observations p
 JOIN mandis      m ON m.id = p.mandi_id
 JOIN commodities c ON c.id = p.commodity_id
 GROUP BY m.district, c.id, c.name, c.perishability_class;
+
+-- ─────────────────────── Phase 12: transport pooling ────────────────────
+-- Transport is the one cost a small farmer can actually control. At Rs 42/km a
+-- 62 km trip costs Rs 2,604 whether the truck is full or not -- Rs 260/qtl on a
+-- ten-quintal lot, which is exactly why the nearest mandi so often wins. Four
+-- farmers going the same morning split it four ways.
+
+CREATE TABLE transport_pools (
+    id            BIGSERIAL PRIMARY KEY,
+    mandi_id      INT REFERENCES mandis(id) NOT NULL,
+    travel_date   DATE NOT NULL,
+    capacity_qtl  NUMERIC(10,2) NOT NULL DEFAULT 90,
+    distance_km   NUMERIC(8,2) NOT NULL DEFAULT 0,
+    created_by    TEXT,
+    status        TEXT NOT NULL DEFAULT 'open',   -- open | full | departed | cancelled
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_pool_lookup ON transport_pools (mandi_id, travel_date, status);
+
+CREATE TABLE pool_members (
+    id         BIGSERIAL PRIMARY KEY,
+    pool_id    BIGINT REFERENCES transport_pools(id) ON DELETE CASCADE NOT NULL,
+    farmer_id  BIGINT REFERENCES farmers(id),
+    farmer_name TEXT NOT NULL,
+    village    TEXT DEFAULT '',
+    qty_qtl    NUMERIC(10,2) NOT NULL CHECK (qty_qtl > 0),
+    joined_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_pool_members ON pool_members (pool_id);
